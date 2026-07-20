@@ -32,6 +32,18 @@ export const signup = async (req, res) => {
             role: role || 'user'
         }).save()
 
+        if ((user.role === 'admin' || user.role === 'superadmin') && !user.isAdminVerified) {
+            const code = Math.floor(100000 + Math.random() * 900000).toString()
+            user.loginVerificationCode = code
+            await user.save()
+            console.log(`\n🔑 ADMIN ACCESS CODE for ${user.email}: ${code}\n`)
+            return res.status(202).json({
+                message: 'Verification required',
+                requires_code: true,
+                email: user.email
+            })
+        }
+
         const token = jwt.sign(
             { id: user._id, name: user.name, email: user.email, role: user.role },
             JWT_SECRET,

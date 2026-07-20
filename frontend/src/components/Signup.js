@@ -14,6 +14,8 @@ const Signup = ({ onSuccess }) => {
         role: 'user'
     })
     const [loading, setLoading] = useState(false)
+    const [requiresCode, setRequiresCode] = useState(false)
+    const [code, setCode] = useState('')
     const { login } = useAuth()
     const navigate = useNavigate()
 
@@ -45,26 +47,48 @@ const Signup = ({ onSuccess }) => {
         setLoading(true)
 
         try {
-            const response = await api.post('/auth/signup', {
-                name: formData.name,
-                email: formData.email,
-                password: formData.password,
-                role: formData.role
-            })
-
-            if (response.data && response.data.user && response.data.token) {
-                login(response.data.user, response.data.token)
-                toast.success('Account created successfully!')
-                onSuccess && onSuccess()
-                if (!onSuccess) {
-                    if (response.data.user.role === 'admin') {
-                        navigate('/admin')
-                    } else {
-                        navigate('/dashboard')
+            if (requiresCode) {
+                if (!code) {
+                    toast.error('Please enter the verification code')
+                    setLoading(false)
+                    return
+                }
+                const response = await api.post('/auth/verify-login', { email: formData.email, code })
+                if (response.data && response.data.user && response.data.token) {
+                    login(response.data.user, response.data.token)
+                    toast.success('Account created and verified successfully!')
+                    onSuccess && onSuccess()
+                    if (!onSuccess) {
+                        navigate(response.data.user.role === 'user' ? '/dashboard' : '/admin')
                     }
+                } else {
+                    toast.error('Invalid response from server')
                 }
             } else {
-                toast.error('Invalid response from server')
+                const response = await api.post('/auth/signup', {
+                    name: formData.name,
+                    email: formData.email,
+                    password: formData.password,
+                    role: formData.role
+                })
+
+                if (response.status === 202 && response.data.requires_code) {
+                    setRequiresCode(true)
+                    toast.success('Please check the backend terminal for your verification code.')
+                    setLoading(false)
+                    return
+                }
+
+                if (response.data && response.data.user && response.data.token) {
+                    login(response.data.user, response.data.token)
+                    toast.success('Account created successfully!')
+                    onSuccess && onSuccess()
+                    if (!onSuccess) {
+                        navigate(response.data.user.role === 'user' ? '/dashboard' : '/admin')
+                    }
+                } else {
+                    toast.error('Invalid response from server')
+                }
             }
         } catch (error) {
             console.error('Signup error:', error)
@@ -77,81 +101,102 @@ const Signup = ({ onSuccess }) => {
 
     const formContent = (
         <form className="space-y-6" onSubmit={handleSubmit}>
-            <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                    <label htmlFor="name" className="mb-2 block text-sm font-semibold text-[#2f4035]">Full name</label>
-                    <input
-                        id="name"
-                        name="name"
-                        type="text"
-                        autoComplete="name"
-                        required
-                        value={formData.name}
-                        onChange={handleChange}
-                        className="fancy-input"
-                        placeholder="Jane Doe"
-                    />
+            {!requiresCode ? (
+                <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="name" className="mb-2 block text-sm font-semibold text-[#2f4035]">Full name</label>
+                            <input
+                                id="name"
+                                name="name"
+                                type="text"
+                                autoComplete="name"
+                                required
+                                value={formData.name}
+                                onChange={handleChange}
+                                className="fancy-input"
+                                placeholder="Jane Doe"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="email" className="mb-2 block text-sm font-semibold text-[#2f4035]">Email address</label>
+                            <input
+                                id="email"
+                                name="email"
+                                type="email"
+                                autoComplete="email"
+                                required
+                                value={formData.email}
+                                onChange={handleChange}
+                                className="fancy-input"
+                                placeholder="jane@example.com"
+                            />
+                        </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label htmlFor="password" className="mb-2 block text-sm font-semibold text-[#2f4035]">Password</label>
+                            <input
+                                id="password"
+                                name="password"
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                value={formData.password}
+                                onChange={handleChange}
+                                className="fancy-input"
+                                placeholder="Create password"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="confirmPassword" className="mb-2 block text-sm font-semibold text-[#2f4035]">Confirm password</label>
+                            <input
+                                id="confirmPassword"
+                                name="confirmPassword"
+                                type="password"
+                                autoComplete="new-password"
+                                required
+                                value={formData.confirmPassword}
+                                onChange={handleChange}
+                                className="fancy-input"
+                                placeholder="Confirm password"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label htmlFor="role" className="mb-2 block text-sm font-semibold text-[#2f4035]">Account type</label>
+                        <select
+                            id="role"
+                            name="role"
+                            value={formData.role}
+                            onChange={handleChange}
+                            className="fancy-input"
+                        >
+                            <option value="user">Regular User</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                    </div>
+                </>
+            ) : (
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="code" className="mb-2 block text-sm font-semibold text-[#2f4035]">Verification Code</label>
+                        <input
+                            id="code"
+                            name="code"
+                            type="text"
+                            required
+                            value={code}
+                            onChange={(e) => setCode(e.target.value)}
+                            className="fancy-input text-center text-xl tracking-[0.2em] font-mono"
+                            placeholder="000000"
+                            maxLength={6}
+                        />
+                    </div>
                 </div>
-                <div>
-                    <label htmlFor="email" className="mb-2 block text-sm font-semibold text-[#2f4035]">Email address</label>
-                    <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        autoComplete="email"
-                        required
-                        value={formData.email}
-                        onChange={handleChange}
-                        className="fancy-input"
-                        placeholder="jane@example.com"
-                    />
-                </div>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                    <label htmlFor="password" className="mb-2 block text-sm font-semibold text-[#2f4035]">Password</label>
-                    <input
-                        id="password"
-                        name="password"
-                        type="password"
-                        autoComplete="new-password"
-                        required
-                        value={formData.password}
-                        onChange={handleChange}
-                        className="fancy-input"
-                        placeholder="Create password"
-                    />
-                </div>
-                <div>
-                    <label htmlFor="confirmPassword" className="mb-2 block text-sm font-semibold text-[#2f4035]">Confirm password</label>
-                    <input
-                        id="confirmPassword"
-                        name="confirmPassword"
-                        type="password"
-                        autoComplete="new-password"
-                        required
-                        value={formData.confirmPassword}
-                        onChange={handleChange}
-                        className="fancy-input"
-                        placeholder="Confirm password"
-                    />
-                </div>
-            </div>
-            <div>
-                <label htmlFor="role" className="mb-2 block text-sm font-semibold text-[#2f4035]">Account type</label>
-                <select
-                    id="role"
-                    name="role"
-                    value={formData.role}
-                    onChange={handleChange}
-                    className="fancy-input"
-                >
-                    <option value="user">Regular User</option>
-                    <option value="admin">Administrator</option>
-                </select>
-            </div>
+            )}
             <BtnPrimary type="submit" disabled={loading} className="w-full py-3 text-base font-semibold">
-                {loading ? 'Creating account...' : 'Create account'}
+                {loading ? (requiresCode ? 'Verifying...' : 'Creating account...') : (requiresCode ? 'Verify Account' : 'Create account')}
             </BtnPrimary>
         </form>
     )
